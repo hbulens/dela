@@ -21,7 +21,7 @@ export interface EmailTemplateData {
 
 export class EmailTemplate {
   private static defaultColors = {
-    primary: '#2563eb',
+    primary: '#0080a6',
     secondary: '#64748b',
     background: '#f8fafc',
     text: '#1e293b',
@@ -261,7 +261,7 @@ export class EmailTemplate {
         
         <div class="content">
             <div class="greeting">
-                Beste ${data.recipientName || '{Naam van Resource}'},
+                Beste,
             </div>
             
             <div class="message">
@@ -317,14 +317,6 @@ export class EmailTemplate {
             </div>
             ` : ''}
             
-            <div class="divider"></div>
-            
-            <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; border-left: 4px solid ${colors.primary};">
-                <strong style="color: ${colors.primary};">📋 Systeem Informatie:</strong><br>
-                • Verzonden door: ${data.senderName || 'Dime.Scheduler Team'}<br>
-                • Tijdstempel: ${new Date().toLocaleString()}<br>
-                • Service: Fastify Webhook API
-            </div>
         </div>
         
         <div class="footer">
@@ -348,7 +340,7 @@ export class EmailTemplate {
     return `
 ${data.companyName || 'Dime.Scheduler'} - ${data.subject || 'Taak Toewijzing'}
 
-Beste ${data.recipientName || '{Naam van Resource}'},
+Beste,
 
 ${isTaskAssignment 
   ? 'Dit is om u te informeren dat een nieuwe taak aan u is toegewezen. Bekijk de details hieronder en zorg ervoor dat u beschikbaar bent voor de geplande tijd.'
@@ -366,16 +358,10 @@ Locatie: ${data.location || '{Locatie}'}
 Beschrijving: ${data.description || '{Taak Beschrijving}'}
 Prioriteit: ${data.priority || 'Gemiddeld'}
 Toegewezen door: ${data.assignedBy || '{Toegewezen door}'}
-Taak ID: ${data.taskId || '{Taak ID}'}
-Project: ${data.projectName || '{Project Naam}'}
+Dossier: ${data.projectName || '{Project Naam}'}
 
 Bekijk de taak details en bevestig uw beschikbaarheid.
 ` : ''}
-
-Systeem Informatie:
-• Verzonden door: ${data.senderName || 'Dime.Scheduler Team'}
-• Tijdstempel: ${new Date().toLocaleString()}
-• Service: Fastify Webhook API
 
 ---
 Deze e-mail is automatisch verzonden door het Dime.Scheduler API systeem.

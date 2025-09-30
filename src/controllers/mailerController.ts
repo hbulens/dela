@@ -6,8 +6,9 @@ import { EmailTemplate } from '../templates/emailTemplate.js';
 export class MailerController {
     /**
      * POST /mailer - Send emails using SendGrid
+     * Handles both regular email requests and Dime.Scheduler appointment notifications
      */
-    static async sendEmail(request: FastifyRequest, reply: FastifyReply) {
+    async sendEmail(request: FastifyRequest, reply: FastifyReply) {
         try {
             console.log('Sending email...');
             // Check if request has body and correct content type
@@ -19,27 +20,34 @@ export class MailerController {
                 });
             }
 
-      // Validate required fields
-      const emailData = request.body as EmailRequest & {
-        recipientName?: string;
-        senderName?: string;
-        companyName?: string;
-        logoUrl?: string;
-        primaryColor?: string;
-        secondaryColor?: string;
-        useTemplate?: boolean;
-        message?: string;
-        // Task assignment fields
-        taskTitle?: string;
-        startDate?: string;
-        endDate?: string;
-        location?: string;
-        description?: string;
-        priority?: string;
-        assignedBy?: string;
-        taskId?: string;
-        projectName?: string;
-      };
+            const body = request.body as any;
+
+            // Check if this is a Dime.Scheduler appointment notification
+            if (this.isDimeSchedulerAppointment(body)) {
+                console.log('Detected Dime.Scheduler appointment notification');
+                return this.handleAppointmentNotification(body, reply);
+            }
+
+            // Validate required fields for regular email
+            const emailData = body as EmailRequest & {
+                senderName?: string;
+                companyName?: string;
+                logoUrl?: string;
+                primaryColor?: string;
+                secondaryColor?: string;
+                useTemplate?: boolean;
+                message?: string;
+                // Task assignment fields
+                taskTitle?: string;
+                startDate?: string;
+                endDate?: string;
+                location?: string;
+                description?: string;
+                priority?: string;
+                assignedBy?: string;
+                taskId?: string;
+                projectName?: string;
+            };
 
             if (!emailData.to) {
                 return reply.status(400).send({
@@ -63,26 +71,25 @@ export class MailerController {
 
             // Generate beautiful HTML template if requested or if no content provided
             if (emailData.useTemplate || (!emailData.text && !emailData.html)) {
-        const templateData = {
-          recipientName: emailData.recipientName,
-          senderName: emailData.senderName || 'Dime.Scheduler Team',
-          subject: emailData.subject,
-          message: emailData.text || emailData.message || 'Thank you for using our service. This is an automated message from the Dime.Scheduler API.',
-          companyName: emailData.companyName || 'Dime.Scheduler',
-          logoUrl: emailData.logoUrl,
-          primaryColor: emailData.primaryColor,
-          secondaryColor: emailData.secondaryColor,
-          // Task assignment data
-          taskTitle: emailData.taskTitle,
-          startDate: emailData.startDate,
-          endDate: emailData.endDate,
-          location: emailData.location,
-          description: emailData.description,
-          priority: emailData.priority,
-          assignedBy: emailData.assignedBy,
-          taskId: emailData.taskId,
-          projectName: emailData.projectName
-        };
+                const templateData = {
+                    senderName: emailData.senderName || 'Dime.Scheduler Team',
+                    subject: emailData.subject,
+                    message: emailData.text || emailData.message || 'Thank you for using our service. This is an automated message from the Dime.Scheduler API.',
+                    companyName: emailData.companyName || 'Dime.Scheduler',
+                    logoUrl: emailData.logoUrl,
+                    primaryColor: emailData.primaryColor,
+                    secondaryColor: emailData.secondaryColor,
+                    // Task assignment data
+                    taskTitle: emailData.taskTitle,
+                    startDate: emailData.startDate,
+                    endDate: emailData.endDate,
+                    location: emailData.location,
+                    description: emailData.description,
+                    priority: emailData.priority,
+                    assignedBy: emailData.assignedBy,
+                    taskId: emailData.taskId,
+                    projectName: emailData.projectName
+                };
 
                 emailData.html = EmailTemplate.generateHTML(templateData);
                 emailData.text = EmailTemplate.generateText(templateData);
@@ -118,5 +125,146 @@ export class MailerController {
                 message: 'Error processing email request'
             });
         }
+    }
+
+    /**
+     * Check if the request body is a Dime.Scheduler appointment
+     */
+    private isDimeSchedulerAppointment(body: any): boolean {
+        return body &&
+            typeof body.Id === 'number' &&
+            typeof body.AppointmentNo === 'string' &&
+            typeof body.StartDate === 'string' &&
+            typeof body.EndDate === 'string' &&
+            typeof body.Subject === 'string' &&
+            body.Task !== undefined;
+    }
+
+    /**
+     * Handle Dime.Scheduler appointment notification
+     */
+    private async handleAppointmentNotification(appointment: any, reply: FastifyReply) {
+        try {
+            console.log('Processing Dime.Scheduler appointment:', {
+                id: appointment.Id,
+                appointmentNo: appointment.AppointmentNo,
+                subject: appointment.Subject,
+                category: appointment.Category?.Name,
+                resources: appointment.Resources?.length || 0
+            });
+
+            // Get recipient email from environment variable
+            const recipientEmail = process.env.APPOINTMENT_RECIPIENT_EMAIL || process.env.DEFAULT_RECIPIENT_EMAIL;
+
+            if (!recipientEmail) {
+                return reply.status(400).send({
+                    success: false,
+                    message: 'No recipient email configured. Set APPOINTMENT_RECIPIENT_EMAIL or DEFAULT_RECIPIENT_EMAIL environment variable.'
+                });
+            }
+
+            // Format dates for display
+            const startDate = this.formatDate(appointment.StartDate);
+            const endDate = this.formatDate(appointment.EndDate);
+
+            // Determine email subject based on category
+            const categoryName = appointment.Category?.Name || appointment.Subject;
+            const emailSubject = `${appointment.Subject}`;
+
+            // Build description with additional details
+            let description = appointment.Task?.Description || appointment.Subject;
+            if (appointment.Body && appointment.Body.trim() !== '-' && appointment.Body.trim() !== '') {
+                description += `\n\n${appointment.Body}`;
+            }
+
+            // Prepare template data
+            const templateData = {
+                subject: emailSubject,
+                message: `U heeft een nieuwe afspraak in Dime.Scheduler. Bekijk de details hieronder.`,
+                companyName: 'Dime.Scheduler',
+                logoUrl: process.env.LOGO_URL || 'https://s3-eu-west-1.amazonaws.com/tpd/logos/5d1230ebbad7ae0001197d19/0x0.png',
+                primaryColor: '#0080a6', // Always use the main brand color
+                // Task assignment fields
+                taskTitle: appointment.Subject,
+                startDate: startDate,
+                endDate: endDate,
+                location: appointment.Task?.Job?.Description || 'Niet gespecificeerd',
+                description: description,
+                priority: this.determinePriority(appointment.Importance || 0),
+                assignedBy: appointment.CreatedUser || 'Systeem',
+                taskId: appointment.AppointmentNo,
+                projectName: appointment.Task?.Job?.JobNo || 'N/A'
+            };
+
+            // Generate email content
+            const emailData: EmailRequest = {
+                to: recipientEmail,
+                from: process.env.FROM_EMAIL || 'noreply@dimescheduler.com',
+                subject: emailSubject,
+                html: EmailTemplate.generateHTML(templateData),
+                text: EmailTemplate.generateText(templateData)
+            };
+
+            // Log email details
+            console.log('Sending appointment notification:', {
+                to: emailData.to,
+                subject: emailData.subject,
+                appointmentId: appointment.Id,
+                category: categoryName
+            });
+
+            // Send email
+            const result = await emailService.sendEmail(emailData);
+
+            if (result.success) {
+                return reply.send({
+                    success: true,
+                    message: 'Appointment notification sent successfully',
+                    messageId: result.messageId,
+                    appointment: {
+                        id: appointment.Id,
+                        appointmentNo: appointment.AppointmentNo,
+                        subject: appointment.Subject
+                    }
+                });
+            } else {
+                return reply.status(500).send({
+                    success: false,
+                    message: 'Failed to send appointment notification',
+                    error: result.error
+                });
+            }
+        } catch (error: any) {
+            console.error('Error processing appointment notification:', error);
+            return reply.status(500).send({
+                success: false,
+                message: 'Error processing appointment notification',
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Format date to Dutch locale
+     */
+    private formatDate(dateString: string): string {
+        const date = new Date(dateString);
+        return date.toLocaleString('nl-NL', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+
+    /**
+     * Determine priority level from importance value
+     */
+    private determinePriority(importance: number): string {
+        if (importance >= 8) return 'Hoog';
+        if (importance >= 4) return 'Gemiddeld';
+        return 'Laag';
     }
 }

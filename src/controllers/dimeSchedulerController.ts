@@ -3,12 +3,18 @@ import { DimeSchedulerClient } from '../services/dimeSchedulerClient.js';
 import { DimeSchedulerProcedure } from '../types/dimeScheduler.js';
 
 export class DimeSchedulerController {
-  private static client: DimeSchedulerClient | null = null;
+  private client: DimeSchedulerClient | null = null;
+
+  constructor(baseUrl?: string, apiKey?: string) {
+    if (baseUrl && apiKey) {
+      this.initializeClient(baseUrl, apiKey);
+    }
+  }
 
   /**
    * Initialize the Dime.Scheduler client
    */
-  static initializeClient(baseUrl: string, apiKey: string): void {
+  initializeClient(baseUrl: string, apiKey: string): void {
     this.client = new DimeSchedulerClient({
       baseUrl,
       apiKey,
@@ -20,7 +26,7 @@ export class DimeSchedulerController {
   /**
    * Get the initialized client or throw error
    */
-  private static getClient(): DimeSchedulerClient {
+  private getClient(): DimeSchedulerClient {
     if (!this.client) {
       throw new Error('Dime.Scheduler client not initialized. Please set DIMESCHEDULER_BASE_URL and DIMESCHEDULER_API_KEY environment variables.');
     }
@@ -28,9 +34,9 @@ export class DimeSchedulerController {
   }
 
   /**
-   * POST /dime/import - Execute stored procedures
+   * POST /dimescheduler/import - Execute stored procedures
    */
-  static async executeProcedures(request: FastifyRequest, reply: FastifyReply) {
+  async executeProcedures(request: FastifyRequest, reply: FastifyReply) {
     try {
       const contentType = request.headers['content-type'];
       if (!contentType || !contentType.includes('application/json')) {
@@ -85,9 +91,9 @@ export class DimeSchedulerController {
   }
 
   /**
-   * POST /dime/job - Create a job
+   * POST /dimescheduler/job - Create a job
    */
-  static async createJob(request: FastifyRequest, reply: FastifyReply) {
+  async createJob(request: FastifyRequest, reply: FastifyReply) {
     try {
       const contentType = request.headers['content-type'];
       if (!contentType || !contentType.includes('application/json')) {
@@ -114,7 +120,7 @@ export class DimeSchedulerController {
       }
 
       const client = this.getClient();
-      const result = await client.createJob(jobData);
+      const result = await client.jobs.upsert(jobData);
 
       if (result.success) {
         return reply.send(result);
@@ -132,9 +138,9 @@ export class DimeSchedulerController {
   }
 
   /**
-   * POST /dime/task - Create a task
+   * POST /dimescheduler/task - Create a task
    */
-  static async createTask(request: FastifyRequest, reply: FastifyReply) {
+  async createTask(request: FastifyRequest, reply: FastifyReply) {
     try {
       const contentType = request.headers['content-type'];
       if (!contentType || !contentType.includes('application/json')) {
@@ -155,8 +161,8 @@ export class DimeSchedulerController {
       };
 
       // Validate required fields
-      if (!taskData.sourceApp || !taskData.sourceType || !taskData.jobNo || 
-          !taskData.taskNo || !taskData.shortDescription || !taskData.description) {
+      if (!taskData.sourceApp || !taskData.sourceType || !taskData.jobNo ||
+        !taskData.taskNo || !taskData.shortDescription || !taskData.description) {
         return reply.status(400).send({
           success: false,
           message: 'sourceApp, sourceType, jobNo, taskNo, shortDescription, and description are required'
@@ -164,7 +170,7 @@ export class DimeSchedulerController {
       }
 
       const client = this.getClient();
-      const result = await client.createTask(taskData);
+      const result = await client.tasks.upsert(taskData);
 
       if (result.success) {
         return reply.send(result);
@@ -182,9 +188,9 @@ export class DimeSchedulerController {
   }
 
   /**
-   * POST /dime/job-with-task - Create a job with a task
+   * POST /dimescheduler/job-with-task - Create a job with a task
    */
-  static async createJobWithTask(request: FastifyRequest, reply: FastifyReply) {
+  async createJobWithTask(request: FastifyRequest, reply: FastifyReply) {
     try {
       const contentType = request.headers['content-type'];
       if (!contentType || !contentType.includes('application/json')) {
@@ -227,7 +233,7 @@ export class DimeSchedulerController {
       }
 
       const client = this.getClient();
-      const result = await client.createJobWithTask(jobData, taskData);
+      const result = await client.jobs.upsertWithTask(jobData, taskData);
 
       if (result.success) {
         return reply.send(result);
@@ -245,9 +251,324 @@ export class DimeSchedulerController {
   }
 
   /**
-   * GET /dime/test - Test connection to Dime.Scheduler
+   * POST /dimescheduler/upsert-appointment - Upsert appointment
    */
-  static async testConnection(request: FastifyRequest, reply: FastifyReply) {
+  async upsertAppointment(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const contentType = request.headers['content-type'];
+      if (!contentType || !contentType.includes('application/json')) {
+        return reply.status(400).send({
+          success: false,
+          message: 'Content-Type must be application/json'
+        });
+      }
+
+      const appointmentData = request.body as {
+        sourceApp: string;
+        sourceType: string;
+        jobNo: string;
+        taskNo: string;
+        appointmentNo?: string;
+        appointmentId?: number;
+        subject?: string;
+        body?: string;
+        start?: string;
+        end?: string;
+        category?: string;
+        timeMarker?: string;
+        importance?: number;
+        locked?: boolean;
+        resourceNo?: string;
+        appointmentGuid?: string;
+        replaceResource?: boolean;
+        sentFromBackOffice?: boolean;
+        backofficeID?: string;
+        backofficeParentID?: string;
+        planningUOM?: string;
+        planningUOMConversion?: number;
+        planningQty?: number;
+        useFixPlanningQty?: boolean;
+        roundToUOM?: boolean;
+        isManualAppointment?: boolean;
+      };
+
+      // Validate required fields
+      const missingFields = [];
+      if (!appointmentData.sourceApp) missingFields.push('sourceApp');
+      if (!appointmentData.sourceType) missingFields.push('sourceType');
+      if (!appointmentData.jobNo) missingFields.push('jobNo');
+      if (!appointmentData.taskNo) missingFields.push('taskNo');
+
+      if (missingFields.length > 0) {
+        console.error('Missing required fields for upsert appointment:', {
+          missingFields,
+          receivedData: appointmentData
+        });
+        return reply.status(400).send({
+          success: false,
+          message: `Missing required fields: ${missingFields.join(', ')}`,
+          missingFields,
+          receivedData: appointmentData
+        });
+      }
+
+      console.log('Validated appointment data for upsert:', appointmentData);
+
+      const client = this.getClient();
+      const result = await client.appointments.upsert(appointmentData);
+
+      if (result.success) {
+        return reply.send(result);
+      } else {
+        return reply.status(500).send(result);
+      }
+    } catch (error: any) {
+      console.error('Error upserting appointment:', error);
+      return reply.status(500).send({
+        success: false,
+        message: 'Error upserting appointment',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * POST /dimescheduler/appointment-category - Set appointment category
+   */
+  async setAppointmentCategory(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const contentType = request.headers['content-type'];
+      if (!contentType || !contentType.includes('application/json')) {
+        return reply.status(400).send({
+          success: false,
+          message: 'Content-Type must be application/json'
+        });
+      }
+
+      const categoryData = request.body as {
+        sourceApp?: string;
+        sourceType?: string;
+        appointmentNo?: string;
+        category: string;
+      };
+
+      // Validate required fields
+      if (!categoryData.category) {
+        return reply.status(400).send({
+          success: false,
+          message: 'category is required'
+        });
+      }
+
+      // At least one appointment identifier must be provided
+      if (!categoryData.appointmentNo) {
+        return reply.status(400).send({
+          success: false,
+          message: 'At least one appointment identifier (appointmentId, appointmentNo, or appointmentGuid) is required'
+        });
+      }
+
+      const client = this.getClient();
+      const result = await client.appointments.setCategory(categoryData);
+
+      if (result.success) {
+        return reply.send(result);
+      } else {
+        return reply.status(500).send(result);
+      }
+    } catch (error: any) {
+      console.error('Error setting appointment category:', error);
+      return reply.status(500).send({
+        success: false,
+        message: 'Error setting appointment category',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * GET /dimescheduler/appointments - Query appointments
+   */
+  async getAppointments(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { startDate, endDate, resources } = request.query as {
+        startDate?: string;
+        endDate?: string;
+        resources?: string | string[];
+      };
+
+      // Validate required parameters
+      if (!startDate || !endDate) {
+        return reply.status(400).send({
+          success: false,
+          message: 'startDate and endDate query parameters are required'
+        });
+      }
+
+      // Normalize resources to array
+      let resourcesArray: string[] | undefined;
+      if (resources) {
+        resourcesArray = Array.isArray(resources) ? resources : [resources];
+      }
+
+      console.log('Querying appointments:', {
+        startDate,
+        endDate,
+        resources: resourcesArray
+      });
+
+      const client = this.getClient();
+      const result = await client.appointments.query(startDate, endDate, resourcesArray);
+
+      if (result.success) {
+        return reply.send(result);
+      } else {
+        return reply.status(500).send(result);
+      }
+    } catch (error: any) {
+      console.error('Error querying appointments:', error);
+      return reply.status(500).send({
+        success: false,
+        message: 'Error querying appointments',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * POST /dimescheduler/set-category-for-drager-appointments - Query and update categories for SICK/AFWEZIGHEID appointments
+   */
+  async setCategoryForDragerAppointments(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { startDate, endDate, resources } = request.query as {
+        startDate?: string;
+        endDate?: string;
+        resources?: string | string[];
+      };
+
+      // Validate required parameters
+      if (!startDate || !endDate) {
+        return reply.status(400).send({
+          success: false,
+          message: 'startDate and endDate query parameters are required'
+        });
+      }
+
+      // Normalize resources to array
+      let resourcesArray: string[] | undefined;
+      if (resources) {
+        resourcesArray = Array.isArray(resources) ? resources : [resources];
+      }
+
+      console.log('Querying appointments for Drager category update:', {
+        startDate,
+        endDate,
+        resources: resourcesArray
+      });
+
+      const client = this.getClient();
+      
+      // Step 1: Query appointments
+      const queryResult = await client.appointments.query(startDate, endDate, resourcesArray);
+
+      if (!queryResult.success) {
+        return reply.status(500).send({
+          success: false,
+          message: 'Failed to query appointments',
+          error: queryResult.error
+        });
+      }
+
+      // Step 2: Filter appointments for task.taskNo = "SICK" and task.job.jobNo = "AFWEZIGHEID"
+      const appointments = Array.isArray(queryResult.data) ? queryResult.data : [];
+      const matchingAppointments = appointments.filter((apt: any) => {
+        return apt.task?.taskNo === 'SICK' && apt.task?.job?.jobNo === 'AFWEZIGHEID';
+      });
+
+      console.log(`Found ${matchingAppointments.length} matching appointments out of ${appointments.length} total`);
+
+      if (matchingAppointments.length === 0) {
+        return reply.send({
+          success: true,
+          message: 'No matching appointments found',
+          data: {
+            totalAppointments: appointments.length,
+            matchingAppointments: 0,
+            updated: 0
+          }
+        });
+      }
+
+      // Step 3: Update category for each matching appointment
+      const updateResults = [];
+      let successCount = 0;
+      let failureCount = 0;
+
+      for (const appointment of matchingAppointments) {
+        try {
+          console.log(`Updating appointment ${appointment.appointmentNo || appointment.appointmentId} to category GEREED`);
+          
+          const updateResult = await client.appointments.setCategory({
+            appointmentId: appointment.appointmentId,
+            appointmentNo: appointment.appointmentNo,
+            appointmentGuid: appointment.appointmentGuid,
+            category: 'GEREED',
+            sentFromBackOffice: true
+          });
+
+          if (updateResult.success) {
+            successCount++;
+            updateResults.push({
+              appointmentId: appointment.appointmentId,
+              appointmentNo: appointment.appointmentNo,
+              status: 'success'
+            });
+          } else {
+            failureCount++;
+            updateResults.push({
+              appointmentId: appointment.appointmentId,
+              appointmentNo: appointment.appointmentNo,
+              status: 'failed',
+              error: updateResult.error
+            });
+          }
+        } catch (error: any) {
+          failureCount++;
+          updateResults.push({
+            appointmentId: appointment.appointmentId,
+            appointmentNo: appointment.appointmentNo,
+            status: 'failed',
+            error: error.message
+          });
+        }
+      }
+
+      return reply.send({
+        success: true,
+        message: `Updated ${successCount} of ${matchingAppointments.length} matching appointments`,
+        data: {
+          totalAppointments: appointments.length,
+          matchingAppointments: matchingAppointments.length,
+          successCount,
+          failureCount,
+          results: updateResults
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Error in setCategoryForDragerAppointments:', error);
+      return reply.status(500).send({
+        success: false,
+        message: 'Error processing Drager appointments',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * GET /dimescheduler/test - Test connection to Dime.Scheduler
+   */
+  async testConnection(request: FastifyRequest, reply: FastifyReply) {
     try {
       const client = this.getClient();
       const result = await client.testConnection();

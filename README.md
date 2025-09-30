@@ -7,11 +7,11 @@ A fast, TypeScript-based Fastify server that provides webhook processing functio
 - **POST /webhook** - Receives and processes webhook data
 - **GET /webhook** - Retrieves stored webhook data
 - **POST /mailer** - Send emails using SendGrid
-- **POST /dime/import** - Execute Dime.Scheduler stored procedures
-- **POST /dime/job** - Create jobs in Dime.Scheduler
-- **POST /dime/task** - Create tasks in Dime.Scheduler
-- **POST /dime/job-with-task** - Create jobs with tasks in one call
-- **GET /dime/test** - Test Dime.Scheduler connection
+- **POST /dimescheduler/import** - Execute Dime.Scheduler stored procedures
+- **POST /dimescheduler/job** - Create jobs in Dime.Scheduler
+- **POST /dimescheduler/task** - Create tasks in Dime.Scheduler
+- **POST /dimescheduler/job-with-task** - Create jobs with tasks in one call
+- **GET /dimescheduler/test** - Test Dime.Scheduler connection
 - **GET /health** - Health check endpoint
 - TypeScript support with full type safety
 - CORS enabled for cross-origin requests
@@ -110,7 +110,9 @@ Retrieves all stored webhook data.
 
 ### POST /mailer
 
-Send emails using SendGrid.
+Send emails using SendGrid. This endpoint intelligently handles both regular email requests and Dime.Scheduler appointment notifications.
+
+#### Regular Email Mode
 
 **Request:**
 - Content-Type: `application/json`
@@ -146,7 +148,65 @@ Send emails using SendGrid.
 }
 ```
 
-### POST /dime/import
+#### Dime.Scheduler Appointment Notification Mode
+
+The same endpoint automatically detects and handles Dime.Scheduler appointment objects (from webhooks or direct API calls).
+
+**Environment Variables Required:**
+- `APPOINTMENT_RECIPIENT_EMAIL` - Primary recipient email address
+- `DEFAULT_RECIPIENT_EMAIL` - Fallback recipient email address
+
+**Example Appointment Request:**
+```json
+{
+  "Id": 1212993,
+  "AppointmentNo": "rVjMXrDY",
+  "StartDate": "2025-10-02T09:00:00",
+  "EndDate": "2025-10-02T17:00:00",
+  "Subject": "Sick",
+  "Body": " - \r\n",
+  "CreatedUser": "Hendrik Bulens",
+  "Resources": [...],
+  "Task": {
+    "Description": "Sick",
+    "Job": {
+      "JobNo": "AFWEZIGHEID",
+      "Description": "AFWEZIGHEID"
+    },
+    "Category": {
+      "Name": "SICK",
+      "Color": "#ff0000"
+    }
+  },
+  "Category": {
+    "Name": "SICK",
+    "Color": "#ff0000"
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Appointment notification sent successfully",
+  "messageId": "abc123-def456-ghi789",
+  "appointment": {
+    "id": 1212993,
+    "appointmentNo": "rVjMXrDY",
+    "subject": "Sick"
+  }
+}
+```
+
+**Features:**
+- Automatically detects Dime.Scheduler appointment format
+- Formats dates in Dutch locale
+- Uses category color for email branding (#0080a6 as default)
+- Includes all appointment details in a beautiful HTML template
+- Maps importance levels to priority (Hoog/Gemiddeld/Laag)
+
+### POST /dimescheduler/import
 
 Execute stored procedures on Dime.Scheduler.
 
@@ -188,7 +248,7 @@ Execute stored procedures on Dime.Scheduler.
 }
 ```
 
-### POST /dime/job
+### POST /dimescheduler/job
 
 Create a job in Dime.Scheduler.
 
@@ -203,7 +263,7 @@ Create a job in Dime.Scheduler.
 }
 ```
 
-### POST /dime/task
+### POST /dimescheduler/task
 
 Create a task in Dime.Scheduler.
 
@@ -220,7 +280,7 @@ Create a task in Dime.Scheduler.
 }
 ```
 
-### POST /dime/job-with-task
+### POST /dimescheduler/job-with-task
 
 Create a job with a task in one API call.
 
@@ -243,7 +303,7 @@ Create a job with a task in one API call.
 }
 ```
 
-### GET /dime/test
+### GET /dimescheduler/test
 
 Test connection to Dime.Scheduler API.
 

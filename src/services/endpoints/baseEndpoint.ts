@@ -1,49 +1,32 @@
 import {
   DimeSchedulerProcedure,
-  DimeSchedulerResponse,
-  DimeSchedulerClientOptions
-} from '../types/dimeScheduler.js';
-import { JobEndpoint } from './endpoints/jobEndpoint.js';
-import { TaskEndpoint } from './endpoints/taskEndpoint.js';
-import { AppointmentEndpoint } from './endpoints/appointmentEndpoint.js';
+  DimeSchedulerResponse
+} from '../../types/dimeScheduler.js';
 
 /**
- * Main client for interacting with the Dime.Scheduler API
- * Provides access to endpoint-specific operations through dedicated endpoint classes
+ * Base class for Dime.Scheduler API endpoints
+ * Provides shared HTTP functionality for all endpoint classes
  */
-export class DimeSchedulerClient {
-  private baseUrl: string;
-  private apiKey: string;
-  private timeout: number;
-  private defaultHeaders: Record<string, string>;
+export abstract class BaseEndpoint {
+  protected baseUrl: string;
+  protected timeout: number;
+  protected defaultHeaders: Record<string, string>;
 
-  // Endpoint classes
-  public readonly jobs: JobEndpoint;
-  public readonly tasks: TaskEndpoint;
-  public readonly appointments: AppointmentEndpoint;
-
-  constructor(options: DimeSchedulerClientOptions) {
-    this.baseUrl = options.baseUrl.replace(/\/$/, ''); // Remove trailing slash
-    this.apiKey = options.apiKey;
-    this.timeout = options.timeout || 30000; // 30 seconds default
-    this.defaultHeaders = {
-      'content-type': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-      'x-api-key': this.apiKey,
-      ...options.defaultHeaders
-    };
-
-    // Initialize endpoint classes
-    this.jobs = new JobEndpoint(this.baseUrl, this.timeout, this.defaultHeaders);
-    this.tasks = new TaskEndpoint(this.baseUrl, this.timeout, this.defaultHeaders);
-    this.appointments = new AppointmentEndpoint(this.baseUrl, this.timeout, this.defaultHeaders);
+  constructor(
+    baseUrl: string,
+    timeout: number,
+    defaultHeaders: Record<string, string>
+  ) {
+    this.baseUrl = baseUrl;
+    this.timeout = timeout;
+    this.defaultHeaders = defaultHeaders;
   }
 
   /**
    * Format date for Dime.Scheduler API
    * Convert ISO date string to format expected by Dime.Scheduler
    */
-  private formatDateForDimeScheduler(dateString?: string): string | null {
+  protected formatDateForDimeScheduler(dateString?: string): string | null {
     if (!dateString) return null;
 
     try {
@@ -67,9 +50,8 @@ export class DimeSchedulerClient {
 
   /**
    * Execute stored procedures on Dime.Scheduler
-   * This method is kept for direct access if needed, but typically you should use the endpoint classes
    */
-  async executeProcedures(procedures: DimeSchedulerProcedure[]): Promise<DimeSchedulerResponse> {
+  protected async executeProcedures(procedures: DimeSchedulerProcedure[]): Promise<DimeSchedulerResponse> {
     try {
       const url = `${this.baseUrl}/import`;
       const body = JSON.stringify(procedures);
@@ -176,37 +158,79 @@ export class DimeSchedulerClient {
   }
 
   /**
-   * Test the connection to Dime.Scheduler API
+   * Make a GET request to the Dime.Scheduler API
    */
-  async testConnection(): Promise<DimeSchedulerResponse> {
+  protected async get(endpoint: string, params?: URLSearchParams): Promise<DimeSchedulerResponse> {
     try {
-      const url = `${this.baseUrl}/health`;
+      const queryString = params ? `?${params.toString()}` : '';
+      const url = `${this.baseUrl}${endpoint}${queryString}`;
+
+      console.log('Dime.Scheduler API GET request:', { url });
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
 
       const response = await fetch(url, {
         method: 'GET',
-        headers: {
-          'x-api-key': this.apiKey
-        },
-        signal: AbortSignal.timeout(this.timeout)
+        headers: this.defaultHeaders,
+        redirect: 'follow',
+        signal: controller.signal
       });
 
-      if (response.ok) {
-        return {
-          success: true,
-          message: 'Connection successful',
-          data: await response.text()
-        };
-      } else {
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Dime.Scheduler API error:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText,
+          url: url
+        });
+
         return {
           success: false,
-          message: `Connection failed with status ${response.status}`,
-          error: await response.text()
+          message: `API request failed with status ${response.status}: ${errorText || response.statusText}`,
+          error: errorText,
+          status: response.status,
+          statusText: response.statusText
         };
       }
+
+      const result = await response.text();
+      console.log('Dime.Scheduler API response:', result);
+
+      // Try to parse the result as JSON
+      try {
+        const jsonResult = JSON.parse(result);
+        return {
+          success: true,
+          message: 'Request successful',
+          data: jsonResult
+        };
+      } catch (parseError) {
+        // If it's not JSON, return the raw text
+        return {
+          success: true,
+          message: 'Request successful',
+          data: result
+        };
+      }
+
     } catch (error: any) {
+      console.error('Dime.Scheduler API request failed:', error);
+
+      if (error.name === 'AbortError') {
+        return {
+          success: false,
+          message: 'Request timeout',
+          error: 'Request exceeded timeout limit'
+        };
+      }
+
       return {
         success: false,
-        message: 'Connection test failed',
+        message: 'Request failed',
         error: error.message || 'Unknown error occurred'
       };
     }

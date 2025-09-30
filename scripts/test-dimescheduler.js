@@ -7,13 +7,13 @@ const testDimeScheduler = async () => {
   try {
     // Test 1: Test connection
     console.log('Testing Dime.Scheduler connection...');
-    const connectionTest = await fetch(`${baseUrl}/dime/test`);
+    const connectionTest = await fetch(`${baseUrl}/dimescheduler/test`);
     const connectionResult = await connectionTest.json();
     console.log('Connection test result:', connectionResult);
 
     // Test 2: Create a job
     console.log('\nCreating a job...');
-    const jobResponse = await fetch(`${baseUrl}/dime/job`, {
+    const jobResponse = await fetch(`${baseUrl}/dimescheduler/job`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -31,7 +31,7 @@ const testDimeScheduler = async () => {
 
     // Test 3: Create a task
     console.log('\nCreating a task...');
-    const taskResponse = await fetch(`${baseUrl}/dime/task`, {
+    const taskResponse = await fetch(`${baseUrl}/dimescheduler/task`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -51,7 +51,7 @@ const testDimeScheduler = async () => {
 
     // Test 4: Create job with task in one call
     console.log('\nCreating job with task...');
-    const jobWithTaskResponse = await fetch(`${baseUrl}/dime/job-with-task`, {
+    const jobWithTaskResponse = await fetch(`${baseUrl}/dimescheduler/job-with-task`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -77,7 +77,7 @@ const testDimeScheduler = async () => {
 
     // Test 5: Execute raw procedures
     console.log('\nExecuting raw procedures...');
-    const proceduresResponse = await fetch(`${baseUrl}/dime/import`, {
+    const proceduresResponse = await fetch(`${baseUrl}/dimescheduler/import`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

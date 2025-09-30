@@ -18,6 +18,8 @@ export interface DimeSchedulerResponse {
   message?: string;
   data?: any;
   error?: string;
+  status?: number;
+  statusText?: string;
 }
 
 export interface DimeSchedulerConfig {
