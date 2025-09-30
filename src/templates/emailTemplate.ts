@@ -1,6 +1,4 @@
 export interface EmailTemplateData {
-  recipientName?: string;
-  senderName?: string;
   subject?: string;
   message?: string;
   companyName?: string;
@@ -17,6 +15,13 @@ export interface EmailTemplateData {
   assignedBy?: string;
   taskId?: string;
   projectName?: string;
+  // Additional fields
+  jobDescription?: string;
+  taskDescription?: string;
+  body?: string;
+  contactAddress?: string;
+  contactTelephone?: string;
+  contactEmail?: string;
 }
 
 export class EmailTemplate {
@@ -273,8 +278,20 @@ export class EmailTemplate {
             
             ${isTaskAssignment ? `
             <div class="task-card">
-                <div class="task-title">${data.taskTitle || '{Taak Titel}'}</div>
+                <div class="task-title">${data.taskDescription || data.subject || data.taskTitle || '{Onderwerp}'}</div>
                 <ul class="task-details">
+                    ${data.jobDescription ? `
+                    <li data-icon="💼">
+                        <span class="task-label">Dossier:</span>
+                        <span class="task-value">${data.jobDescription}</span>
+                    </li>
+                    ` : ''}
+                    ${data.body && data.body.trim() !== '-' && data.body.trim() !== '' ? `
+                    <li data-icon="📄">
+                        <span class="task-label">Details:</span>
+                        <span class="task-value">${data.body}</span>
+                    </li>
+                    ` : ''}
                     <li data-icon="📅">
                         <span class="task-label">Startdatum:</span>
                         <span class="task-value">${data.startDate || '{Startdatum}'}</span>
@@ -283,32 +300,50 @@ export class EmailTemplate {
                         <span class="task-label">Einddatum:</span>
                         <span class="task-value">${data.endDate || '{Einddatum}'}</span>
                     </li>
+                    ${data.contactAddress ? `
                     <li data-icon="📍">
-                        <span class="task-label">Locatie:</span>
-                        <span class="task-value">${data.location || '{Locatie}'}</span>
+                        <span class="task-label">Adres:</span>
+                        <span class="task-value">${data.contactAddress}</span>
                     </li>
-                    <li data-icon="📝">
-                        <span class="task-label">Beschrijving:</span>
-                        <span class="task-value">${data.description || '{Taak Beschrijving}'}</span>
+                    ` : ''}
+                    ${data.contactTelephone ? `
+                    <li data-icon="📞">
+                        <span class="task-label">Telefoon:</span>
+                        <span class="task-value"><a href="tel:${data.contactTelephone}" style="color: #0080a6; text-decoration: none;">${data.contactTelephone}</a></span>
                     </li>
+                    ` : ''}
+                    ${data.contactEmail ? `
+                    <li data-icon="✉️">
+                        <span class="task-label">E-mail:</span>
+                        <span class="task-value"><a href="mailto:${data.contactEmail}" style="color: #0080a6; text-decoration: none;">${data.contactEmail}</a></span>
+                    </li>
+                    ` : ''}
+                    ${data.priority ? `
                     <li data-icon="⚡">
                         <span class="task-label">Prioriteit:</span>
                         <span class="task-value">
-                            <span class="priority-${(data.priority || 'medium').toLowerCase()}">${data.priority || 'Gemiddeld'}</span>
+                            <span class="priority-${(data.priority || 'medium').toLowerCase()}">${data.priority}</span>
                         </span>
                     </li>
+                    ` : ''}
+                    ${data.assignedBy ? `
                     <li data-icon="👤">
                         <span class="task-label">Toegewezen door:</span>
-                        <span class="task-value">${data.assignedBy || '{Toegewezen door}'}</span>
+                        <span class="task-value">${data.assignedBy}</span>
                     </li>
+                    ` : ''}
+                    ${data.taskId ? `
                     <li data-icon="🆔">
                         <span class="task-label">Taak ID:</span>
-                        <span class="task-value">${data.taskId || '{Taak ID}'}</span>
+                        <span class="task-value">${data.taskId}</span>
                     </li>
+                    ` : ''}
+                    ${data.projectName ? `
                     <li data-icon="📁">
                         <span class="task-label">Project:</span>
-                        <span class="task-value">${data.projectName || '{Project Naam}'}</span>
+                        <span class="task-value">${data.projectName}</span>
                     </li>
+                    ` : ''}
                 </ul>
             </div>
             
@@ -337,6 +372,24 @@ export class EmailTemplate {
   static generateText(data: EmailTemplateData): string {
     const isTaskAssignment = data.taskTitle || data.startDate || data.endDate;
     
+    let details = '';
+    if (isTaskAssignment) {
+      details = '\nTAAK TOEWIJZING DETAILS:\n========================\n\n';
+      details += `${data.taskDescription || data.subject || data.taskTitle || '{Onderwerp}'}\n\n`;
+      if (data.jobDescription) details += `Dossier: ${data.jobDescription}\n`;
+      if (data.body && data.body.trim() !== '-' && data.body.trim() !== '') details += `Details: ${data.body}\n`;
+      details += `Startdatum: ${data.startDate || '{Startdatum}'}\n`;
+      details += `Einddatum: ${data.endDate || '{Einddatum}'}\n`;
+      if (data.contactAddress) details += `Adres: ${data.contactAddress}\n`;
+      if (data.contactTelephone) details += `Telefoon: ${data.contactTelephone}\n`;
+      if (data.contactEmail) details += `E-mail: ${data.contactEmail}\n`;
+      if (data.priority) details += `Prioriteit: ${data.priority}\n`;
+      if (data.assignedBy) details += `Toegewezen door: ${data.assignedBy}\n`;
+      if (data.taskId) details += `Taak ID: ${data.taskId}\n`;
+      if (data.projectName) details += `Project: ${data.projectName}\n`;
+      details += '\nBekijk de taak details en bevestig uw beschikbaarheid.\n';
+    }
+    
     return `
 ${data.companyName || 'Dime.Scheduler'} - ${data.subject || 'Taak Toewijzing'}
 
@@ -346,23 +399,7 @@ ${isTaskAssignment
   ? 'Dit is om u te informeren dat een nieuwe taak aan u is toegewezen. Bekijk de details hieronder en zorg ervoor dat u beschikbaar bent voor de geplande tijd.'
   : (data.message || 'Bedankt voor het gebruik van onze service. Dit is een geautomatiseerd bericht van de Dime.Scheduler API.')
 }
-
-${isTaskAssignment ? `
-TAAK TOEWIJZING DETAILS:
-========================
-
-Taak Titel: ${data.taskTitle || '{Taak Titel}'}
-Startdatum: ${data.startDate || '{Startdatum}'}
-Einddatum: ${data.endDate || '{Einddatum}'}
-Locatie: ${data.location || '{Locatie}'}
-Beschrijving: ${data.description || '{Taak Beschrijving}'}
-Prioriteit: ${data.priority || 'Gemiddeld'}
-Toegewezen door: ${data.assignedBy || '{Toegewezen door}'}
-Dossier: ${data.projectName || '{Project Naam}'}
-
-Bekijk de taak details en bevestig uw beschikbaarheid.
-` : ''}
-
+${details}
 ---
 Deze e-mail is automatisch verzonden door het Dime.Scheduler API systeem.
 Bezoek: https://dimescheduler.com

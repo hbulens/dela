@@ -30,7 +30,6 @@ export class MailerController {
 
             // Validate required fields for regular email
             const emailData = body as EmailRequest & {
-                senderName?: string;
                 companyName?: string;
                 logoUrl?: string;
                 primaryColor?: string;
@@ -47,6 +46,13 @@ export class MailerController {
                 assignedBy?: string;
                 taskId?: string;
                 projectName?: string;
+                // Additional fields
+                jobDescription?: string;
+                taskDescription?: string;
+                body?: string;
+                contactAddress?: string;
+                contactTelephone?: string;
+                contactEmail?: string;
             };
 
             if (!emailData.to) {
@@ -72,7 +78,6 @@ export class MailerController {
             // Generate beautiful HTML template if requested or if no content provided
             if (emailData.useTemplate || (!emailData.text && !emailData.html)) {
                 const templateData = {
-                    senderName: emailData.senderName || 'Dime.Scheduler Team',
                     subject: emailData.subject,
                     message: emailData.text || emailData.message || 'Thank you for using our service. This is an automated message from the Dime.Scheduler API.',
                     companyName: emailData.companyName || 'Dime.Scheduler',
@@ -88,7 +93,14 @@ export class MailerController {
                     priority: emailData.priority,
                     assignedBy: emailData.assignedBy,
                     taskId: emailData.taskId,
-                    projectName: emailData.projectName
+                    projectName: emailData.projectName,
+                    // Additional fields
+                    jobDescription: emailData.jobDescription,
+                    taskDescription: emailData.taskDescription,
+                    body: emailData.body,
+                    contactAddress: emailData.contactAddress,
+                    contactTelephone: emailData.contactTelephone,
+                    contactEmail: emailData.contactEmail
                 };
 
                 emailData.html = EmailTemplate.generateHTML(templateData);
@@ -171,29 +183,29 @@ export class MailerController {
             const categoryName = appointment.Category?.Name || appointment.Subject;
             const emailSubject = `${appointment.Subject}`;
 
-            // Build description with additional details
-            let description = appointment.Task?.Description || appointment.Subject;
-            if (appointment.Body && appointment.Body.trim() !== '-' && appointment.Body.trim() !== '') {
-                description += `\n\n${appointment.Body}`;
-            }
-
-            // Prepare template data
+            // Prepare template data with all required fields
             const templateData = {
-                subject: emailSubject,
+                subject: appointment.Subject,
                 message: `U heeft een nieuwe afspraak in Dime.Scheduler. Bekijk de details hieronder.`,
                 companyName: 'Dime.Scheduler',
                 logoUrl: process.env.LOGO_URL || 'https://s3-eu-west-1.amazonaws.com/tpd/logos/5d1230ebbad7ae0001197d19/0x0.png',
                 primaryColor: '#0080a6', // Always use the main brand color
+                // Core fields
+                jobDescription: appointment.Task?.Job?.Description,
+                taskDescription: appointment.Task?.Description,
+                body: appointment.Body,
                 // Task assignment fields
                 taskTitle: appointment.Subject,
                 startDate: startDate,
                 endDate: endDate,
-                location: appointment.Task?.Job?.Description || 'Niet gespecificeerd',
-                description: description,
                 priority: this.determinePriority(appointment.Importance || 0),
                 assignedBy: appointment.CreatedUser || 'Systeem',
                 taskId: appointment.AppointmentNo,
-                projectName: appointment.Task?.Job?.JobNo || 'N/A'
+                projectName: appointment.Task?.Job?.JobNo,
+                // Contact information (from custom fields if available)
+                contactAddress: appointment.ContactAddress || appointment.Task?.ContactAddress || appointment.Task?.Job?.ContactAddress,
+                contactTelephone: appointment.ContactTelephone || appointment.Task?.ContactTelephone || appointment.Task?.Job?.ContactTelephone,
+                contactEmail: appointment.ContactEmail || appointment.Task?.ContactEmail || appointment.Task?.Job?.ContactEmail
             };
 
             // Generate email content
