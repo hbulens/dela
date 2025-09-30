@@ -179,13 +179,13 @@ export class MailerController {
             const startDate = this.formatDate(appointment.StartDate);
             const endDate = this.formatDate(appointment.EndDate);
 
-            // Determine email subject based on category
+            // Determine email subject based on task description
             const categoryName = appointment.Category?.Name || appointment.Subject;
-            const emailSubject = `${appointment.Subject}`;
+            const emailSubject = appointment.Task?.Description || appointment.Subject;
 
             // Prepare template data with all required fields
             const templateData = {
-                subject: appointment.Subject,
+                subject: emailSubject,
                 message: `U heeft een nieuwe afspraak in Dime.Scheduler. Bekijk de details hieronder.`,
                 companyName: 'Dime.Scheduler',
                 logoUrl: process.env.LOGO_URL || 'https://s3-eu-west-1.amazonaws.com/tpd/logos/5d1230ebbad7ae0001197d19/0x0.png',
