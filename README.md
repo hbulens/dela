@@ -11,6 +11,11 @@ A fast, TypeScript-based Fastify server that provides webhook processing functio
 - **POST /dimescheduler/job** - Create jobs in Dime.Scheduler
 - **POST /dimescheduler/task** - Create tasks in Dime.Scheduler
 - **POST /dimescheduler/job-with-task** - Create jobs with tasks in one call
+- **POST /dimescheduler/upsert-appointment** - Upsert appointments in Dime.Scheduler
+- **POST /dimescheduler/appointment-category** - Update appointment category
+- **GET /dimescheduler/appointments** - Query appointments by date range and resources
+- **POST /dimescheduler/set-category-for-drager-appointments** - Bulk update categories for SICK/AFWEZIGHEID appointments
+- **POST /dimescheduler/set-timemarker-for-drager-appointments** - Bulk update time markers for SICK/AFWEZIGHEID appointments
 - **GET /dimescheduler/test** - Test Dime.Scheduler connection
 - **GET /health** - Health check endpoint
 - TypeScript support with full type safety
@@ -303,6 +308,149 @@ Create a job with a task in one API call.
 }
 ```
 
+### POST /dimescheduler/upsert-appointment
+
+Upsert (create or update) an appointment in Dime.Scheduler.
+
+**Request:**
+```json
+{
+  "sourceApp": "CRONUSBE",
+  "sourceType": "CRONUSBE",
+  "jobNo": "JOB002",
+  "taskNo": "TASK002001",
+  "subject": "Appointment subject",
+  "start": "2025-09-30T10:00:00",
+  "end": "2025-09-30T11:00:00",
+  "resourceNo": "RESOURCE001",
+  "category": "APPOINTMENT"
+}
+```
+
+### POST /dimescheduler/appointment-category
+
+Update the category of an existing appointment.
+
+**Request:**
+```json
+{
+  "sourceApp": null,
+  "sourceType": null,
+  "appointmentNo": "APT001",
+  "appointmentId": 12345,
+  "category": "COMPLETED",
+  "appointmentGuid": null,
+  "sentFromBackOffice": true
+}
+```
+
+**Note:** At least one appointment identifier (appointmentId, appointmentNo, or appointmentGuid) must be provided.
+
+### GET /dimescheduler/appointments
+
+Query appointments by date range and optional resources.
+
+**Query Parameters:**
+- `startDate` (required) - Start date in ISO 8601 format (e.g., `2025-09-01T00:00:00`)
+- `endDate` (required) - End date in ISO 8601 format (e.g., `2025-09-30T23:59:59`)
+- `resources` (optional) - Resource identifier(s). Can be a single string or array of strings
+
+**Example Request:**
+```
+GET /dimescheduler/appointments?startDate=2025-09-01T00:00:00&endDate=2025-09-30T23:59:59&resources=RESOURCE001&resources=RESOURCE002
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Appointments retrieved successfully",
+  "data": [
+    {
+      "id": 12345,
+      "subject": "Appointment 1",
+      "start": "2025-09-15T10:00:00",
+      "end": "2025-09-15T11:00:00",
+      "resourceNo": "RESOURCE001"
+    }
+  ]
+}
+```
+
+### POST /dimescheduler/set-category-for-drager-appointments
+
+Bulk operation that queries appointments and automatically updates the category to "GEREED" for appointments where `task.taskNo = "SICK"` and `task.job.jobNo = "AFWEZIGHEID"`.
+
+**Query Parameters:**
+- `startDate` (required) - Start date in ISO 8601 format (e.g., `2025-10-01T00:00:00`)
+- `endDate` (required) - End date in ISO 8601 format (e.g., `2025-10-03T23:59:59`)
+- `resources` (optional) - Resource identifier(s). Can be a single string or array of strings
+
+**Example Request:**
+```
+POST /dimescheduler/set-category-for-drager-appointments?startDate=2025-10-01&endDate=2025-10-03&resources=API&resources=API2
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Updated 5 of 5 matching appointments",
+  "data": {
+    "totalAppointments": 20,
+    "matchingAppointments": 5,
+    "successCount": 5,
+    "failureCount": 0,
+    "results": [
+      {
+        "appointmentId": 12345,
+        "appointmentNo": "APT001",
+        "status": "success"
+      }
+    ]
+  }
+}
+```
+
+### POST /dimescheduler/set-timemarker-for-drager-appointments
+
+Bulk operation that queries appointments and automatically updates the time marker for appointments where `task.taskNo = "SICK"` and `task.job.jobNo = "AFWEZIGHEID"`.
+
+Uses the import API with the `mboc_updateAppointmentTimeMarker` stored procedure as documented in the [Dime.Scheduler API reference](https://docs.dimescheduler.com/develop/api/appointment#set-time-marker).
+
+**Query Parameters:**
+- `startDate` (required) - Start date in ISO 8601 format (e.g., `2025-10-01T00:00:00`)
+- `endDate` (required) - End date in ISO 8601 format (e.g., `2025-10-03T23:59:59`)
+- `timeMarker` (required) - The time marker code to set (e.g., `TIMEMARKER002`)
+- `resources` (optional) - Resource identifier(s). Can be a single string or array of strings
+
+**Example Request:**
+```
+POST /dimescheduler/set-timemarker-for-drager-appointments?startDate=2025-10-01&endDate=2025-10-03&timeMarker=TIMEMARKER002&resources=API&resources=API2
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Updated 5 of 5 matching appointments to time marker TIMEMARKER002",
+  "data": {
+    "totalAppointments": 20,
+    "matchingAppointments": 5,
+    "successCount": 5,
+    "failureCount": 0,
+    "timeMarker": "TIMEMARKER002",
+    "results": [
+      {
+        "appointmentId": 12345,
+        "appointmentNo": "APT001",
+        "status": "success"
+      }
+    ]
+  }
+}
+```
+
 ### GET /dimescheduler/test
 
 Test connection to Dime.Scheduler API.
@@ -360,7 +508,12 @@ src/
 │   └── dimeSchedulerRoutes.ts  # Dime.Scheduler routes
 ├── services/
 │   ├── emailService.ts   # SendGrid email service
-│   └── dimeSchedulerClient.ts  # Dime.Scheduler API client
+│   ├── dimeSchedulerClient.ts  # Dime.Scheduler API client
+│   └── endpoints/        # Dime.Scheduler endpoint classes
+│       ├── baseEndpoint.ts      # Base endpoint with shared functionality
+│       ├── jobEndpoint.ts       # Job-related operations
+│       ├── taskEndpoint.ts      # Task-related operations
+│       └── appointmentEndpoint.ts  # Appointment-related operations
 ├── store/
 │   └── serverStore.ts    # In-memory data store
 └── types/
@@ -381,6 +534,44 @@ The project follows a clean, REST-like architecture with separation of concerns:
 
 This structure makes the code more maintainable, testable, and follows REST API best practices.
 
+## Dime.Scheduler Client Architecture
+
+The Dime.Scheduler client uses an endpoint-based architecture for better organization and maintainability:
+
+```typescript
+import { DimeSchedulerClient } from './services/dimeSchedulerClient.js';
+
+const client = new DimeSchedulerClient({
+  baseUrl: 'https://api.dimescheduler.com',
+  apiKey: 'your-api-key',
+  timeout: 30000
+});
+
+// Jobs endpoint
+await client.jobs.upsert(jobData);
+await client.jobs.upsertWithTask(jobData, taskData);
+
+// Tasks endpoint
+await client.tasks.upsert(taskData);
+
+// Appointments endpoint
+await client.appointments.query(startDate, endDate, resources);
+await client.appointments.upsert(appointmentData);
+await client.appointments.setCategory(categoryData);
+await client.appointments.setTimeMarker({ appointmentId, timeMarker });
+
+// Direct API access (if needed)
+await client.executeProcedures(procedures);
+await client.testConnection();
+```
+
+### Benefits
+
+- **Organized**: Related operations grouped by resource type
+- **Intuitive**: Clear API structure (e.g., `client.appointments.query()`)
+- **Maintainable**: Easy to add new endpoints and operations
+- **Type-safe**: Full TypeScript support with type definitions
+
 ## Error Handling
 
 The API includes comprehensive error handling for:
@@ -391,3 +582,4 @@ The API includes comprehensive error handling for:
 - Missing required email fields
 - SendGrid API errors
 - Email validation errors
+- Dime.Scheduler API errors

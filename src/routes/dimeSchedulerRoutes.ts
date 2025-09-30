@@ -76,6 +76,18 @@ export async function dimeSchedulerRoutes(fastify: FastifyInstance) {
     return controller.setCategoryForDragerAppointments(request, reply);
   });
 
+  // POST /dimescheduler/set-timemarker-for-drager-appointments - Query and update time markers for SICK/AFWEZIGHEID appointments
+  fastify.post('/dimescheduler/set-timemarker-for-drager-appointments', async (request, reply) => {
+    const controller = getDimeSchedulerController();
+    if (!controller) {
+      return reply.status(503).send({
+        success: false,
+        message: 'Dime.Scheduler client not initialized'
+      });
+    }
+    return controller.setTimeMarkerForDragerAppointments(request, reply);
+  });
+
   // POST /addWarningToAppointment - Add warning to appointment
   fastify.post('/addWarningToAppointment', async (request, reply) => {
     const controller = new AppointmentController();

@@ -106,6 +106,35 @@ export class AppointmentEndpoint extends BaseEndpoint {
   }
 
   /**
+   * Set appointment time marker using mboc_updateAppointmentTimeMarker procedure
+   * Based on Dime.Scheduler API documentation: https://docs.dimescheduler.com/develop/api/appointment#set-time-marker
+   */
+  async setTimeMarker(timeMarkerData: {
+    appointmentId: number;
+    timeMarker: string;
+  }): Promise<DimeSchedulerResponse> {
+    const procedure: DimeSchedulerProcedure = {
+      StoredProcedureName: 'mboc_updateAppointmentTimeMarker',
+      ParameterNames: [
+        'AppointmentId',
+        'TimeMarker'
+      ],
+      ParameterValues: [
+        timeMarkerData.appointmentId.toString(),
+        timeMarkerData.timeMarker
+      ]
+    };
+
+    console.log('Setting appointment time marker:', {
+      procedure: procedure.StoredProcedureName,
+      appointmentId: timeMarkerData.appointmentId,
+      timeMarker: timeMarkerData.timeMarker
+    });
+
+    return this.executeProcedures([procedure]);
+  }
+
+  /**
    * Set appointment category using POST /appointmentCategory endpoint
    * Based on Dime.Scheduler API documentation
    */

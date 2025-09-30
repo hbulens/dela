@@ -467,7 +467,7 @@ export class DimeSchedulerController {
       });
 
       const client = this.getClient();
-      
+
       // Step 1: Query appointments
       const queryResult = await client.appointments.query(startDate, endDate, resourcesArray);
 
@@ -482,7 +482,7 @@ export class DimeSchedulerController {
       // Step 2: Filter appointments for task.taskNo = "SICK" and task.job.jobNo = "AFWEZIGHEID"
       const appointments = Array.isArray(queryResult.data) ? queryResult.data : [];
       const matchingAppointments = appointments.filter((apt: any) => {
-        return apt.task?.taskNo === 'SICK' && apt.task?.job?.jobNo === 'AFWEZIGHEID';
+        return apt.task?.job?.jobNo?.startsWith('PB');
       });
 
       console.log(`Found ${matchingAppointments.length} matching appointments out of ${appointments.length} total`);
@@ -506,12 +506,17 @@ export class DimeSchedulerController {
 
       for (const appointment of matchingAppointments) {
         try {
-          console.log(`Updating appointment ${appointment.appointmentNo || appointment.appointmentId} to category GEREED`);
+          // Handle different property name cases (id, Id, appointmentId)
+          const aptId = appointment.id || appointment.appointmentId || appointment.Id;
+          const aptNo = appointment.appointmentNo || appointment.AppointmentNo;
+          const aptGuid = appointment.appointmentGuid || appointment.AppointmentGuid;
           
+          console.log(`Updating appointment ${aptNo || aptId} (ID: ${aptId}) to category GEREED`);
+
           const updateResult = await client.appointments.setCategory({
-            appointmentId: appointment.appointmentId,
-            appointmentNo: appointment.appointmentNo,
-            appointmentGuid: appointment.appointmentGuid,
+            appointmentId: aptId,
+            appointmentNo: aptNo,
+            appointmentGuid: aptGuid,
             category: 'GEREED',
             sentFromBackOffice: true
           });
@@ -519,24 +524,26 @@ export class DimeSchedulerController {
           if (updateResult.success) {
             successCount++;
             updateResults.push({
-              appointmentId: appointment.appointmentId,
-              appointmentNo: appointment.appointmentNo,
+              appointmentId: aptId,
+              appointmentNo: aptNo,
               status: 'success'
             });
           } else {
             failureCount++;
             updateResults.push({
-              appointmentId: appointment.appointmentId,
-              appointmentNo: appointment.appointmentNo,
+              appointmentId: aptId,
+              appointmentNo: aptNo,
               status: 'failed',
               error: updateResult.error
             });
           }
         } catch (error: any) {
+          const aptId = appointment.id || appointment.appointmentId || appointment.Id;
+          const aptNo = appointment.appointmentNo || appointment.AppointmentNo;
           failureCount++;
           updateResults.push({
-            appointmentId: appointment.appointmentId,
-            appointmentNo: appointment.appointmentNo,
+            appointmentId: aptId,
+            appointmentNo: aptNo,
             status: 'failed',
             error: error.message
           });
@@ -560,6 +567,153 @@ export class DimeSchedulerController {
       return reply.status(500).send({
         success: false,
         message: 'Error processing Drager appointments',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * POST /dimescheduler/set-timemarker-for-drager-appointments - Query and update time markers for SICK/AFWEZIGHEID appointments
+   */
+  async setTimeMarkerForDragerAppointments(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { startDate, endDate, resources, timeMarker } = request.query as {
+        startDate?: string;
+        endDate?: string;
+        resources?: string | string[];
+        timeMarker?: string;
+      };
+
+      // Validate required parameters
+      if (!startDate || !endDate) {
+        return reply.status(400).send({
+          success: false,
+          message: 'startDate and endDate query parameters are required'
+        });
+      }
+
+      if (!timeMarker) {
+        return reply.status(400).send({
+          success: false,
+          message: 'timeMarker query parameter is required'
+        });
+      }
+
+      // Normalize resources to array
+      let resourcesArray: string[] | undefined;
+      if (resources) {
+        resourcesArray = Array.isArray(resources) ? resources : [resources];
+      }
+
+      console.log('Querying appointments for Drager time marker update:', {
+        startDate,
+        endDate,
+        resources: resourcesArray,
+        timeMarker
+      });
+
+      const client = this.getClient();
+
+      // Step 1: Query appointments
+      const queryResult = await client.appointments.query(startDate, endDate, resourcesArray);
+
+      if (!queryResult.success) {
+        return reply.status(500).send({
+          success: false,
+          message: 'Failed to query appointments',
+          error: queryResult.error
+        });
+      }
+
+      // Step 2: Filter appointments for task.taskNo = "SICK" and task.job.jobNo = "AFWEZIGHEID"
+      const appointments = Array.isArray(queryResult.data) ? queryResult.data : [];
+      const matchingAppointments = appointments.filter((apt: any) => {
+        return apt.task?.job?.jobNo?.startsWith('PB');
+      });
+
+      console.log(`Found ${matchingAppointments.length} matching appointments out of ${appointments.length} total`);
+
+      if (matchingAppointments.length === 0) {
+        return reply.send({
+          success: true,
+          message: 'No matching appointments found',
+          data: {
+            totalAppointments: appointments.length,
+            matchingAppointments: 0,
+            updated: 0
+          }
+        });
+      }
+
+      // Step 3: Update time marker for each matching appointment
+      const updateResults = [];
+      let successCount = 0;
+      let failureCount = 0;
+
+      for (const appointment of matchingAppointments) {
+        try {
+          // Handle different property name cases (id, Id, appointmentId)
+          const aptId = appointment.id || appointment.appointmentId || appointment.Id;
+          const aptNo = appointment.appointmentNo || appointment.AppointmentNo;
+          
+          if (!aptId) {
+            throw new Error('Appointment ID not found in appointment object');
+          }
+          
+          console.log(`Updating appointment ${aptNo || aptId} (ID: ${aptId}) to time marker ${timeMarker}`);
+
+          const updateResult = await client.appointments.setTimeMarker({
+            appointmentId: aptId,
+            timeMarker: timeMarker
+          });
+
+          if (updateResult.success) {
+            successCount++;
+            updateResults.push({
+              appointmentId: aptId,
+              appointmentNo: aptNo,
+              status: 'success'
+            });
+          } else {
+            failureCount++;
+            updateResults.push({
+              appointmentId: aptId,
+              appointmentNo: aptNo,
+              status: 'failed',
+              error: updateResult.error
+            });
+          }
+        } catch (error: any) {
+          const aptId = appointment.appointmentId || appointment.Id;
+          const aptNo = appointment.appointmentNo || appointment.AppointmentNo;
+          failureCount++;
+          updateResults.push({
+            appointmentId: aptId,
+            appointmentNo: aptNo,
+            status: 'failed',
+            error: error.message
+          });
+        }
+      }
+
+      return reply.send({
+        success: true,
+        message: `Updated ${successCount} of ${matchingAppointments.length} matching appointments to time marker ${timeMarker}`,
+        data: {
+          totalAppointments: appointments.length,
+          matchingAppointments: matchingAppointments.length,
+          successCount,
+          failureCount,
+          timeMarker,
+          results: updateResults
+        }
+      });
+
+    } catch (error: any) {
+      console.error('Error in setTimeMarkerForDragerAppointments:', error);
+      return reply.status(500).send({
+        success: false,
+        message: 'Error processing Drager appointments time marker update',
         error: error.message
       });
     }
